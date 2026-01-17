@@ -1,24 +1,6 @@
 import * as THREE from "three";
 
-// 1. Fixed Anchor Point (Connaught Place)
-const ANCHOR = { lon: 77.209, lat: 28.6139 };
-
-// 2. Elevation Config (The "Z-Axis" Logic)
-// Maps line colors (hex) to height levels.
-const ELEVATION_MAP: Record<string, number> = {
-  // Underground Lines (Yellow, Orange)
-  "#FFC520": -8, // Yellow
-  "#F58220": -8, // Orange
-
-  // Elevated Lines (Pink, Blue, Magenta)
-  "#FF69B4": 10, // Pink
-  "#0000FF": 10, // Blue
-  "#800080": 10, // Violet/Magenta
-
-  // Ground/Mix (Red, Green)
-  "#FF0000": 4, // Red
-  "#008000": 4, // Green
-};
+// NOTE: Hardcoded ANCHOR is removed. We now accept it as an argument.
 
 const MER_CONST = 20037508.34 / 180;
 const forwardMercator = (lon: number, lat: number) => {
@@ -28,7 +10,24 @@ const forwardMercator = (lon: number, lat: number) => {
   return [x, y];
 };
 
-const [centerX, centerY] = forwardMercator(ANCHOR.lon, ANCHOR.lat);
+// Elevation Config
+const ELEVATION_MAP: Record<string, number> = {
+  "#FFC520": -8,
+  "#F58220": -8, // Underground
+  "#FF69B4": 10,
+  "#0000FF": 10,
+  "#800080": 10, // Elevated
+  "#FF0000": 4,
+  "#008000": 4, // Ground
+};
+
+const getName = (props: any) => {
+  return props["name:en"] || props.name || props.station || "Unknown Station";
+};
+
+const getElevation = (color: string) => {
+  return ELEVATION_MAP[color.toUpperCase()] || 0;
+};
 
 export type MetroLineData = {
   id: string;
@@ -43,28 +42,15 @@ export type MetroStationData = {
   position: THREE.Vector3;
 };
 
-// Helper: Fix messy OSM names
-const getName = (props: any) => {
-  return (
-    props["name:en"] ||
-    props.name ||
-    props.station ||
-    props.description ||
-    "Unknown Station"
-  );
-};
-
-// Helper: Get elevation based on color (fuzzy match)
-const getElevation = (color: string) => {
-  // Normalize color to uppercase
-  const c = color.toUpperCase();
-  // Check exact match or fallback to 0
-  return ELEVATION_MAP[c] || 0;
-};
-
-export const parseGeoJSON = (json: any): MetroLineData[] => {
+// Updated: Now requires 'anchor'
+export const parseGeoJSON = (
+  json: any,
+  anchor: { lon: number; lat: number },
+): MetroLineData[] => {
   const lines: MetroLineData[] = [];
   if (!json.features) return [];
+
+  const [centerX, centerY] = forwardMercator(anchor.lon, anchor.lat);
 
   json.features.forEach((feature: any, index: number) => {
     if (feature.geometry.type === "LineString") {
@@ -77,7 +63,7 @@ export const parseGeoJSON = (json: any): MetroLineData[] => {
           const [x, y] = forwardMercator(lon, lat);
           return new THREE.Vector3(
             (x - centerX) / 1000,
-            elevation, // Apply height!
+            elevation,
             -(y - centerY) / 1000,
           );
         },
@@ -94,26 +80,27 @@ export const parseGeoJSON = (json: any): MetroLineData[] => {
   return lines;
 };
 
-export const parseStations = (json: any): MetroStationData[] => {
+// Updated: Now requires 'anchor'
+export const parseStations = (
+  json: any,
+  anchor: { lon: number; lat: number },
+): MetroStationData[] => {
   const stations: MetroStationData[] = [];
   if (!json.features) return [];
+
+  const [centerX, centerY] = forwardMercator(anchor.lon, anchor.lat);
 
   json.features.forEach((feature: any, index: number) => {
     if (feature.geometry.type === "Point") {
       const [lon, lat] = feature.geometry.coordinates;
       const [x, y] = forwardMercator(lon, lat);
 
-      // Note: Accurately mapping Station Height requires checking which line it belongs to.
-      // For this step, we put them at a "neutral" floating height (2) or check properties.
-      // A more advanced version would raycast to the nearest line to snap height.
-      const baseHeight = 2;
-
       stations.push({
         id: feature.id || `stn-${index}`,
         name: getName(feature.properties),
         position: new THREE.Vector3(
           (x - centerX) / 1000,
-          baseHeight,
+          2, // Floating height
           -(y - centerY) / 1000,
         ),
       });

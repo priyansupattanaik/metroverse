@@ -1,32 +1,21 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { parseStations, type MetroStationData } from "./utils/metroParser";
+import { type MetroStationData } from "./utils/metroParser";
 import { Html } from "@react-three/drei";
 
-export default function Stations() {
-  const [stations, setStations] = useState<MetroStationData[]>([]);
+// Receives data as a prop instead of fetching it internally
+export default function Stations({ data }: { data: MetroStationData[] }) {
   const [hovered, setHovered] = useState<string | null>(null);
-
-  // The Mesh that will be cloned
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const dummy = new THREE.Object3D();
 
-  // 1. Load Station Data
   useLayoutEffect(() => {
-    fetch("/delhi_stations.geojson")
-      .then((res) => res.json())
-      .then((data) => {
-        const parsed = parseStations(data);
-        setStations(parsed);
-      })
-      .catch((err) => console.error("Could not load station data:", err));
-  }, []);
+    if (!meshRef.current || data.length === 0) return;
 
-  // 2. Position the Instances
-  useLayoutEffect(() => {
-    if (!meshRef.current || stations.length === 0) return;
+    // Critical: Update the instance count when city changes
+    meshRef.current.count = data.length;
 
-    stations.forEach((station, i) => {
+    data.forEach((station, i) => {
       dummy.position.copy(station.position);
       dummy.scale.setScalar(1);
       dummy.updateMatrix();
@@ -34,14 +23,12 @@ export default function Stations() {
     });
 
     meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [stations]);
+  }, [data]);
 
-  // 3. Hover Interaction
   const handlePointerMove = (e: any) => {
-    // e.instanceId tells us exactly WHICH dot we hit
     const id = e.instanceId;
-    if (id !== undefined && stations[id]) {
-      setHovered(stations[id].name);
+    if (id !== undefined && data[id]) {
+      setHovered(data[id].name);
       document.body.style.cursor = "pointer";
     }
   };
@@ -51,24 +38,20 @@ export default function Stations() {
     document.body.style.cursor = "default";
   };
 
-  if (stations.length === 0) return null;
+  if (data.length === 0) return null;
 
   return (
     <group>
       <instancedMesh
         ref={meshRef}
-        args={[undefined, undefined, stations.length]}
+        args={[undefined, undefined, data.length]}
         onPointerMove={handlePointerMove}
         onPointerOut={handlePointerOut}
       >
-        {/* Geometry: Low poly sphere for performance */}
         <sphereGeometry args={[0.15, 10, 10]} />
-
-        {/* Material: Bright White Glow */}
         <meshBasicMaterial color="#ffffff" toneMapped={false} />
       </instancedMesh>
 
-      {/* 4. The Tooltip UI */}
       {hovered && (
         <Html position={[0, 0, 0]} wrapperClass="pointer-events-none">
           <div
