@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import Map, { NavigationControl, Layer, Source } from "react-map-gl/maplibre";
-import type { MapRef } from "react-map-gl"; // <--- FIX IS HERE (Added 'type')
+import type { MapRef } from "react-map-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { CITIES } from "./config";
 import MetroNetwork from "./MetroNetwork";
-import Chat from "./Chat"; // <--- NEW: Import Chat
+import Chat from "./Chat";
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY;
 const MAP_STYLE = `https://api.maptiler.com/maps/dataviz-dark/style.json?key=${MAPTILER_KEY}`;
@@ -16,8 +16,13 @@ export default function CityMap() {
 
   useEffect(() => {
     if (mapRef.current) {
+      const { longitude, latitude, zoom, pitch, bearing } =
+        activeCity.viewState;
       mapRef.current.flyTo({
-        ...activeCity.viewState,
+        center: [longitude, latitude],
+        zoom,
+        pitch,
+        bearing,
         duration: 3000,
         essential: true,
       });
@@ -25,7 +30,7 @@ export default function CityMap() {
   }, [activeCityId]);
 
   if (!MAPTILER_KEY)
-    return <div className="text-white p-10">⚠️ Missing VITE_MAPTILER_KEY</div>;
+    return <div className="text-white p-10">⚠️ Missing MAPTILER KEY</div>;
 
   return (
     <div className="relative w-full h-full">
@@ -39,7 +44,6 @@ export default function CityMap() {
       >
         <NavigationControl position="bottom-right" />
 
-        {/* 3D Buildings */}
         <Source
           id="openmaptiles"
           type="vector"
@@ -75,31 +79,32 @@ export default function CityMap() {
           />
         </Source>
 
-        {/* Metro Lines */}
-        <MetroNetwork operatorId={activeCity.operatorId} />
+        {/* PASS BBOX HERE */}
+        <MetroNetwork bbox={activeCity.bbox} />
       </Map>
 
-      {/* UI: City Switcher */}
-      <div className="absolute top-6 right-6 flex gap-2 z-10">
-        {Object.values(CITIES).map((city) => (
-          <button
-            key={city.id}
-            onClick={() => setActiveCityId(city.id)}
-            className={`
-              px-4 py-2 rounded font-bold text-xs tracking-widest transition-all border backdrop-blur-md
-              ${
-                activeCityId === city.id
-                  ? "bg-cyan-600/80 text-white border-cyan-400 shadow-[0_0_20px_cyan]"
-                  : "bg-black/60 text-gray-400 border-gray-700 hover:text-white"
-              }
-            `}
-          >
-            {city.name.toUpperCase()}
-          </button>
-        ))}
+      {/* Scrollable City List */}
+      <div className="absolute top-6 right-6 z-10 w-64 max-h-[80vh] overflow-y-auto pr-2 scrollbar-thin">
+        <div className="flex flex-col gap-2 items-end">
+          {Object.values(CITIES).map((city) => (
+            <button
+              key={city.id}
+              onClick={() => setActiveCityId(city.id)}
+              className={`
+                px-4 py-2 rounded font-bold text-xs tracking-widest transition-all border backdrop-blur-md w-full text-right
+                ${
+                  activeCityId === city.id
+                    ? "bg-cyan-600/80 text-white border-cyan-400 shadow-[0_0_15px_cyan]"
+                    : "bg-black/70 text-gray-400 border-gray-700 hover:text-white hover:border-white"
+                }
+              `}
+            >
+              {city.name.toUpperCase()}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* UI: AI Chat */}
       <Chat />
     </div>
   );

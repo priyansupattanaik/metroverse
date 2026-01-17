@@ -9,7 +9,30 @@
 body {
   margin: 0;
   padding: 0;
-  overflow: hidden; /* Prevents scrollbars */
+  overflow: hidden;
   width: 100vw;
   height: 100vh;
+}
+
+/* MapLibre Popup Overrides */
+.maplibregl-popup-content {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.maplibregl-popup-tip {
+  display: none !important; /* Hide the arrow for cleaner look */
+}
+
+/* Chat Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #000;
+}
+::-webkit-scrollbar-thumb {
+  background: #0e7490;
+  border-radius: 2px;
 }
