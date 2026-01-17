@@ -2,8 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* You can keep your custom CSS below this line if you had any */
+:root {
+  background-color: #000;
+}
+
 body {
-  background: #000; /* basic reset */
   margin: 0;
+  padding: 0;
+  overflow: hidden; /* Prevents scrollbars */
+  width: 100vw;
+  height: 100vh;
 }

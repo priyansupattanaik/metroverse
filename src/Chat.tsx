@@ -1,168 +1,151 @@
 import { useState, useRef, useEffect } from "react";
 
-export default function Chat({ city }: { city: string }) {
+// Get API Key from .env
+const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
+
+export default function Chat() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: string; content: string }[]>(
     [],
   );
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom of chat
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Auto-scroll to bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || loading) return;
 
-    // 1. Add User Message
-    const userMsg = { role: "user", content: input };
-    setMessages((prev) => [...prev, userMsg]);
+    if (!API_KEY) {
+      alert("Missing VITE_OPENROUTER_API_KEY in .env");
+      return;
+    }
+
+    const userMessage = { role: "user", content: input };
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
-    setIsLoading(true);
+    setLoading(true);
 
     try {
-      // 2. Call OpenRouter API
       const response = await fetch(
         "https://openrouter.ai/api/v1/chat/completions",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`,
+            Authorization: `Bearer ${API_KEY}`,
             "HTTP-Referer": window.location.origin, // OpenRouter Requirement
             "X-Title": "Metroverse", // OpenRouter Requirement
           },
           body: JSON.stringify({
-            model: "meta-llama/llama-3.2-3b-instruct:free",
+            model: "meta-llama/llama-3.2-3b-instruct",
             messages: [
               {
                 role: "system",
-                content: `You are a futuristic AI guide for the ${city} Metro. Keep answers short, cyberpunk-themed, and under 50 words.`,
+                content:
+                  "You are a cyberpunk AI guide for Metroverse. Keep answers short, cool, and futuristic.",
               },
-              ...messages, // Include chat history
-              userMsg,
+              ...messages,
+              userMessage,
             ],
           }),
         },
       );
 
       const data = await response.json();
+      const aiMessage = {
+        role: "assistant",
+        content:
+          data.choices?.[0]?.message?.content || "Connection Interrupted...",
+      };
 
-      // 3. Add AI Response
-      if (data.choices && data.choices[0]) {
-        const aiMsg = {
-          role: "assistant",
-          content: data.choices[0].message.content,
-        };
-        setMessages((prev) => [...prev, aiMsg]);
-      } else {
-        throw new Error("No response from AI");
-      }
+      setMessages((prev) => [...prev, aiMessage]);
     } catch (error) {
       console.error("AI Error:", error);
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: "⚠️ CONNECTION ERROR: NEURAL LINK FAILED.",
-        },
+        { role: "assistant", content: "⚠️ NEURAL LINK FAILED" },
       ]);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  // MINIMIZED STATE (Button)
+  // 1. Minimized Button
   if (!isOpen) {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="absolute bottom-6 right-6 z-50 group flex items-center gap-2 bg-black/80 border border-cyan-500/50 px-5 py-3 rounded-full hover:bg-cyan-900/80 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+        className="absolute bottom-10 right-6 z-50 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-6 rounded-full shadow-[0_0_20px_cyan] transition-all"
       >
-        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-        <span className="text-cyan-400 font-mono text-sm font-bold tracking-widest group-hover:text-white">
-          AI GUIDE
-        </span>
+        AI GUIDE
       </button>
     );
   }
 
-  // EXPANDED STATE (Chat Window)
+  // 2. Chat Window
   return (
-    <div className="absolute bottom-6 right-6 z-50 w-80 md:w-96 flex flex-col bg-black/95 border border-cyan-500/50 rounded-xl overflow-hidden shadow-[0_0_30px_rgba(6,182,212,0.2)] backdrop-blur-xl">
+    <div className="absolute bottom-10 right-6 z-50 w-80 md:w-96 bg-black/90 border border-cyan-500 rounded-lg shadow-2xl backdrop-blur-md flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="bg-cyan-900/20 p-3 border-b border-cyan-500/30 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-cyan-400 rounded-full shadow-[0_0_8px_cyan]" />
-          <span className="text-cyan-400 font-mono text-xs font-bold tracking-[0.2em]">
-            METRO.AI // {city.toUpperCase()}
-          </span>
-        </div>
+      <div className="bg-cyan-900/50 p-3 border-b border-cyan-500 flex justify-between items-center">
+        <span className="text-cyan-400 font-mono font-bold tracking-widest">
+          METRO.AI
+        </span>
         <button
           onClick={() => setIsOpen(false)}
-          className="text-cyan-600 hover:text-white transition-colors text-lg leading-none"
+          className="text-cyan-400 hover:text-white"
         >
-          ×
+          ✕
         </button>
       </div>
 
-      {/* Messages Area */}
-      <div className="h-80 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-cyan-900 scrollbar-track-transparent">
+      {/* Messages */}
+      <div className="h-80 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 && (
-          <div className="text-gray-600 text-xs font-mono text-center mt-20">
+          <div className="text-gray-500 text-xs text-center font-mono mt-10">
             SYSTEM ONLINE.
             <br />
-            ASK ME ABOUT {city.toUpperCase()}.
+            ASK ME ABOUT THE CITY.
           </div>
         )}
-
-        {messages.map((msg, i) => (
+        {messages.map((m, i) => (
           <div
             key={i}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`
-              max-w-[85%] p-3 rounded-lg text-sm font-mono leading-relaxed
-              ${
-                msg.role === "user"
-                  ? "bg-cyan-900/40 text-cyan-100 border border-cyan-500/30 rounded-br-none"
-                  : "bg-gray-900/80 text-gray-300 border border-gray-700/50 rounded-bl-none"
-              }
-            `}
+              className={`max-w-[85%] p-2 rounded text-sm ${
+                m.role === "user"
+                  ? "bg-cyan-800 text-white"
+                  : "bg-gray-800 text-gray-300 border border-gray-700"
+              }`}
             >
-              {msg.content}
+              {m.content}
             </div>
           </div>
         ))}
-
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-gray-900/50 border border-gray-800 p-2 rounded text-xs text-cyan-500 font-mono animate-pulse">
-              PROCESSING...
-            </div>
-          </div>
+        {loading && (
+          <div className="text-cyan-500 text-xs animate-pulse">Thinking...</div>
         )}
-        <div ref={messagesEndRef} />
+        <div ref={scrollRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="p-3 bg-black border-t border-cyan-900/50 flex gap-2">
+      {/* Input */}
+      <div className="p-3 bg-black/50 border-t border-cyan-900 flex gap-2">
         <input
-          type="text"
+          className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none"
+          placeholder="Enter query..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Initiate query..."
-          className="flex-1 bg-gray-900/50 border border-gray-700 text-white text-sm px-3 py-2 rounded focus:outline-none focus:border-cyan-500 focus:bg-black transition-all font-mono placeholder-gray-600"
         />
         <button
           onClick={handleSend}
-          disabled={isLoading}
-          className="bg-cyan-700 hover:bg-cyan-500 disabled:bg-gray-800 text-white px-4 py-2 rounded font-bold text-xs transition-all tracking-wider"
+          className="bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded text-xs font-bold"
         >
           SEND
         </button>
