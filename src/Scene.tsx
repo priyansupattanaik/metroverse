@@ -1,5 +1,5 @@
 import { Canvas } from "@react-three/fiber";
-import { CameraControls, CatmullRomLine, Grid } from "@react-three/drei"; // <--- Changed Import
+import { CameraControls, CatmullRomLine, Grid } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { useEffect, useState, useRef } from "react";
 import * as THREE from "three";
@@ -11,7 +11,9 @@ import {
 } from "./utils/metroParser";
 import Stations from "./Stations";
 import Trains from "./Trains";
-import UI from "./UI"; // <--- Import the new UI
+import UI from "./UI";
+import Chat from "./Chat"; // <--- AI Component
+import Buildings from "./Buildings"; // <--- 3D Map Component
 import { CITIES, type CityConfig } from "./config";
 
 const THEME = {
@@ -36,36 +38,50 @@ export default function Scene() {
   const [activeCityId, setActiveCityId] = useState<string>("delhi");
   const [lines, setLines] = useState<MetroLineData[]>([]);
   const [stations, setStations] = useState<MetroStationData[]>([]);
+  const [buildings, setBuildings] = useState<any>(null); // <--- State for Building Data
   const [loading, setLoading] = useState(false);
 
-  // Ref for the Camera Controller
   const controlsRef = useRef<CameraControls>(null);
-
   const activeCity: CityConfig = CITIES[activeCityId];
 
-  // 1. Load Data
+  // Load Data Effect
   useEffect(() => {
     setLoading(true);
+    // Clear old data to prevent visual glitches during switch
     setLines([]);
     setStations([]);
+    setBuildings(null);
 
     const loadData = async () => {
       try {
-        const [linesRes, stationsRes] = await Promise.all([
+        console.log(`Fetching data for ${activeCity.name}...`);
+
+        // Fetch Lines, Stations, AND Buildings in parallel
+        const [linesRes, stationsRes, buildRes] = await Promise.all([
           fetch(activeCity.files.lines),
           fetch(activeCity.files.stations),
+          // Check if buildings file is defined in config before fetching
+          activeCity.files.buildings
+            ? fetch(activeCity.files.buildings)
+            : Promise.resolve(null),
         ]);
+
+        if (!linesRes.ok || !stationsRes.ok)
+          throw new Error("Failed to load Metro data");
+
         const linesJson = await linesRes.json();
         const stationsJson = await stationsRes.json();
+        const buildJson =
+          buildRes && buildRes.ok ? await buildRes.json() : null;
 
         setLines(parseGeoJSON(linesJson, activeCity.anchor));
         setStations(parseStations(stationsJson, activeCity.anchor));
+        setBuildings(buildJson);
 
-        // Reset Camera when city changes
-        // fitToBox helps frame the new city instantly
+        // Reset Camera to "God View"
         controlsRef.current?.setLookAt(0, 20, 20, 0, 0, 0, true);
       } catch (err) {
-        console.error("Error loading city:", err);
+        console.error("Critical Load Error:", err);
       } finally {
         setLoading(false);
       }
@@ -73,26 +89,25 @@ export default function Scene() {
     loadData();
   }, [activeCityId]);
 
-  // 2. The Fly-To Logic
+  // Fly-To Logic for Search
   const handleFocusStation = (station: MetroStationData) => {
     if (!controlsRef.current) return;
 
-    // Position: Camera goes slightly above and offset from the station
-    const x = station.position.x + 1; // Offset X
-    const y = station.position.y + 2; // Height (Zoom level)
-    const z = station.position.z + 1; // Offset Z
-
-    // Target: Look directly at the station
-    const tx = station.position.x;
-    const ty = station.position.y;
-    const tz = station.position.z;
-
-    // Smoothly animate to this new angle (enableTransition = true)
-    controlsRef.current.setLookAt(x, y, z, tx, ty, tz, true);
+    // Smoothly fly to the station
+    controlsRef.current.setLookAt(
+      station.position.x + 1, // Camera X
+      station.position.y + 2, // Camera Y (Zoom height)
+      station.position.z + 1, // Camera Z
+      station.position.x, // Target X
+      station.position.y, // Target Y
+      station.position.z, // Target Z
+      true, // Enable Transition
+    );
   };
 
   return (
     <div style={{ height: "100vh", width: "100vw", background: THEME.black }}>
+      {/* 1. The UI Layer (Search + City Switcher) */}
       <UI
         activeCityId={activeCityId}
         setActiveCityId={setActiveCityId}
@@ -101,9 +116,13 @@ export default function Scene() {
         onFocusStation={handleFocusStation}
       />
 
+      {/* 2. The AI Chat Interface */}
+      <Chat city={activeCity.name} />
+
+      {/* 3. The 3D Scene */}
       <Canvas camera={{ position: [20, 15, 20], fov: 45 }}>
         <color attach="background" args={[THEME.black]} />
-        <fog attach="fog" args={[THEME.black, 20, 80]} />
+        <fog attach="fog" args={[THEME.black, 10, 80]} />
 
         <group>
           {lines.map((line) => (
@@ -111,6 +130,10 @@ export default function Scene() {
           ))}
           <Stations data={stations} />
           <Trains lines={lines} />
+          {/* Render buildings if data exists */}
+          {buildings && (
+            <Buildings data={buildings} anchor={activeCity.anchor} />
+          )}
         </group>
 
         <Grid
@@ -121,13 +144,11 @@ export default function Scene() {
           fadeDistance={50}
         />
 
-        {/* Replaced OrbitControls with CameraControls for animation support */}
         <CameraControls
           ref={controlsRef}
           minDistance={1}
           maxDistance={100}
-          dollySpeed={0.5}
-          smoothTime={0.5} // Smoothness of the fly-to animation
+          smoothTime={0.5}
         />
 
         <ambientLight intensity={0.5} />

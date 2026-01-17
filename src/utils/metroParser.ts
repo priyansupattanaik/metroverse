@@ -1,7 +1,6 @@
 import * as THREE from "three";
 
-// NOTE: Hardcoded ANCHOR is removed. We now accept it as an argument.
-
+// Standard Mercator Projection
 const MER_CONST = 20037508.34 / 180;
 const forwardMercator = (lon: number, lat: number) => {
   const x = lon * MER_CONST;
@@ -10,23 +9,26 @@ const forwardMercator = (lon: number, lat: number) => {
   return [x, y];
 };
 
-// Elevation Config
 const ELEVATION_MAP: Record<string, number> = {
   "#FFC520": -8,
-  "#F58220": -8, // Underground
+  "#F58220": -8, // Yellow/Orange (Underground)
   "#FF69B4": 10,
   "#0000FF": 10,
-  "#800080": 10, // Elevated
+  "#800080": 10, // Pink/Blue/Violet (Elevated)
   "#FF0000": 4,
-  "#008000": 4, // Ground
+  "#008000": 4, // Red/Green (Ground/Mix)
 };
 
+// IMPROVED: Robust Name Extractor
 const getName = (props: any) => {
-  return props["name:en"] || props.name || props.station || "Unknown Station";
-};
-
-const getElevation = (color: string) => {
-  return ELEVATION_MAP[color.toUpperCase()] || 0;
+  if (!props) return "Unknown";
+  return (
+    props["name:en"] ||
+    props["name"] ||
+    props["station"] ||
+    props["official_name"] ||
+    "Unknown Station"
+  );
 };
 
 export type MetroLineData = {
@@ -42,13 +44,12 @@ export type MetroStationData = {
   position: THREE.Vector3;
 };
 
-// Updated: Now requires 'anchor'
 export const parseGeoJSON = (
   json: any,
   anchor: { lon: number; lat: number },
 ): MetroLineData[] => {
   const lines: MetroLineData[] = [];
-  if (!json.features) return [];
+  if (!json || !json.features) return [];
 
   const [centerX, centerY] = forwardMercator(anchor.lon, anchor.lat);
 
@@ -56,7 +57,7 @@ export const parseGeoJSON = (
     if (feature.geometry.type === "LineString") {
       const color =
         feature.properties.colour || feature.properties.color || "#FFFFFF";
-      const elevation = getElevation(color);
+      const elevation = ELEVATION_MAP[color.toUpperCase()] || 0;
 
       const points = feature.geometry.coordinates.map(
         ([lon, lat]: number[]) => {
@@ -80,27 +81,32 @@ export const parseGeoJSON = (
   return lines;
 };
 
-// Updated: Now requires 'anchor'
 export const parseStations = (
   json: any,
   anchor: { lon: number; lat: number },
 ): MetroStationData[] => {
   const stations: MetroStationData[] = [];
-  if (!json.features) return [];
+  if (!json || !json.features) return [];
 
   const [centerX, centerY] = forwardMercator(anchor.lon, anchor.lat);
 
   json.features.forEach((feature: any, index: number) => {
+    // Some OSM exports use "Point", others use "Node"
     if (feature.geometry.type === "Point") {
       const [lon, lat] = feature.geometry.coordinates;
       const [x, y] = forwardMercator(lon, lat);
 
+      const name = getName(feature.properties);
+
+      // Filter out points that are "subway_entrance" but not actual stations if possible
+      // (Optional logic: if name is just "Exit 2", ignore it)
+
       stations.push({
         id: feature.id || `stn-${index}`,
-        name: getName(feature.properties),
+        name: name,
         position: new THREE.Vector3(
           (x - centerX) / 1000,
-          2, // Floating height
+          2,
           -(y - centerY) / 1000,
         ),
       });
