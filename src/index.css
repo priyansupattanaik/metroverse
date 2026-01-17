@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* You can keep your custom CSS below this line if you had any */
+body {
+  background: #000; /* basic reset */
+  margin: 0;
+}
