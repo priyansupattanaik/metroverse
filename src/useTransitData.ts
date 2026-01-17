@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 
 const API_KEY = import.meta.env.VITE_TRANSITLAND_KEY;
-// Cache for 3 days to save API calls
-const CACHE_DURATION = 1000 * 60 * 60 * 24 * 3;
+// Cache for 24 hours
+const CACHE_DURATION = 1000 * 60 * 60 * 24;
 
 export function useTransitData(bbox: string) {
   const [routes, setRoutes] = useState<any>(null);
@@ -11,16 +11,25 @@ export function useTransitData(bbox: string) {
   const [status, setStatus] = useState<string>("IDLE");
 
   useEffect(() => {
-    if (!bbox || !API_KEY) {
-      console.warn("Missing BBOX or API KEY");
+    // Safety Check: If bbox is missing (due to config error), stop here.
+    if (!bbox) {
+      console.warn("⚠️ BBOX is undefined. Check src/config.ts");
+      setStatus("ERROR");
+      return;
+    }
+
+    if (!API_KEY) {
+      console.error("❌ Missing VITE_TRANSITLAND_KEY in .env");
+      setStatus("ERROR");
       return;
     }
 
     const loadData = async () => {
       setStatus("LOADING");
+      // New Cache Key to force refresh
+      const cacheKey = `metro_bbox_v8_strict_${bbox}`;
 
-      // 1. CHECK LOCAL STORAGE CACHE
-      const cacheKey = `metro_bbox_v6_${bbox}`;
+      // 1. Check LocalStorage
       try {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
@@ -39,42 +48,48 @@ export function useTransitData(bbox: string) {
           }
         }
       } catch (e) {
-        console.warn("Cache read error");
+        console.warn("Cache ignored");
       }
 
-      // 2. FETCH LIVE DATA
+      // 2. Fetch Live Data
       try {
-        console.log(`🌐 Scanning Area: ${bbox}`);
+        console.log(`🌐 Scanning Metro in: ${bbox}`);
 
         const [routesRes, stopsRes] = await Promise.all([
-          // Fetch Routes: Look for 'metro' vehicle types in the box
+          // Request Routes with vehicle_type=1 (Subway)
           axios.get("https://transit.land/api/v2/rest/routes", {
             params: {
               bbox: bbox,
-              vehicle_type: "metro",
+              vehicle_type: 1, // STRICT MODE: 1 = Subway/Metro
               include_geometry: true,
-              limit: 200, // High limit to ensure we get everything
+              limit: 200,
             },
             headers: { apikey: API_KEY },
           }),
-          // Fetch Stops: Look for 'metro' stops in the box
+          // Request Stops
           axios.get("https://transit.land/api/v2/rest/stops", {
             params: {
               bbox: bbox,
-              vehicle_type: "metro",
-              limit: 2000, // Huge limit so we don't miss dots
+              vehicle_type: 1,
+              limit: 1000,
             },
             headers: { apikey: API_KEY },
           }),
         ]);
 
-        // Process Routes
-        const routeFeatures = routesRes.data.routes.map((route: any) => ({
+        // Double Filter Client-Side (Just in case API sends Buses)
+        const validRoutes = routesRes.data.routes.filter(
+          (r: any) => r.route_type === 1,
+        );
+
+        console.log(`✅ API Returned: ${routesRes.data.routes.length} items.`);
+        console.log(`🚇 Valid Metros: ${validRoutes.length} items.`);
+
+        const routeFeatures = validRoutes.map((route: any) => ({
           type: "Feature",
           geometry: route.geometry,
           properties: {
             name: route.route_long_name || route.route_short_name,
-            // Fallback color to Cyan if API sends null
             color: route.route_color ? `#${route.route_color}` : "#00FFFF",
           },
         }));
@@ -98,7 +113,7 @@ export function useTransitData(bbox: string) {
         };
         const stopData = { type: "FeatureCollection", features: stopFeatures };
 
-        // Save to Cache
+        // Only save if we actually found lines
         if (routeFeatures.length > 0) {
           localStorage.setItem(
             cacheKey,
@@ -109,6 +124,7 @@ export function useTransitData(bbox: string) {
           );
           setStatus("SUCCESS");
         } else {
+          console.warn("⚠️ No Metro lines found (Count = 0).");
           setStatus("EMPTY");
         }
 

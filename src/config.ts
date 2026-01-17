@@ -8,7 +8,7 @@ export type CityConfig = {
     pitch: number;
     bearing: number;
   };
-  bbox: string; // "minLon,minLat,maxLon,maxLat"
+  bbox: string; // We use BBOX now, NOT operatorId
 };
 
 export const CITIES: Record<string, CityConfig> = {

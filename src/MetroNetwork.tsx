@@ -6,11 +6,10 @@ const MetroNetwork = memo(function MetroNetwork({ bbox }: { bbox: string }) {
   const { routes, stops, status } = useTransitData(bbox);
   const [hoverInfo, setHoverInfo] = useState<any>(null);
 
-  // Status Badge
   if (!routes || status === "LOADING") {
     return (
       <div className="absolute top-6 left-6 z-20 bg-black/80 border border-cyan-500/50 text-cyan-400 px-4 py-2 rounded text-xs font-mono animate-pulse shadow-[0_0_10px_cyan]">
-        SCANNING NETWORK...
+        SCANNING METRO...
       </div>
     );
   }
@@ -18,7 +17,7 @@ const MetroNetwork = memo(function MetroNetwork({ bbox }: { bbox: string }) {
   if (status === "EMPTY" || status === "ERROR") {
     return (
       <div className="absolute top-6 left-6 z-20 bg-red-900/90 border border-red-500 text-white px-4 py-2 rounded text-xs font-mono shadow-[0_0_10px_red]">
-        NO SIGNAL / OFFLINE
+        NO METRO DATA FOUND
       </div>
     );
   }
@@ -26,7 +25,7 @@ const MetroNetwork = memo(function MetroNetwork({ bbox }: { bbox: string }) {
   return (
     <>
       <div className="absolute top-6 left-6 z-20 bg-black/80 border border-green-500/50 text-green-400 px-4 py-2 rounded text-xs font-mono shadow-[0_0_10px_green]">
-        ONLINE: {routes.features.length} LINES DETECTED
+        ONLINE: {routes.features.length} LINES
       </div>
 
       <Source id="metro-routes" type="geojson" data={routes}>

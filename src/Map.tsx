@@ -83,7 +83,6 @@ export default function CityMap() {
         <MetroNetwork bbox={activeCity.bbox} />
       </Map>
 
-      {/* Scrollable City List */}
       <div className="absolute top-6 right-6 z-10 w-64 max-h-[80vh] overflow-y-auto pr-2 scrollbar-thin">
         <div className="flex flex-col gap-2 items-end">
           {Object.values(CITIES).map((city) => (
